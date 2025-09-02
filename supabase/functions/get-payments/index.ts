@@ -1,34 +1,24 @@
-import { Hono } from "npm:hono@4.2.1";
-import { Cashfree } from "npm:cashfree-pg-sdk-nodejs@2.1.0";
+// Follow this setup guide to integrate the Deno language server with your editor:
+// https://deno.land/manual/getting_started/setup_your_environment
+// This enables autocomplete, go to definition, etc.
 
-const CASHFREE_CLIENT_ID = Deno.env.get("CASHFREE_CLIENT_ID") ?? "";
-const CASHFREE_CLIENT_SECRET = Deno.env.get("CASHFREE_CLIENT_SECRET") ?? "";
-const CASHFREE_ENV = Deno.env.get("CASHFREE_ENV") ?? "sandbox";
+import { serve } from "https://deno.land/std@0.131.0/http/server.ts";
 
-const cf = new Cashfree({
-  client_id: CASHFREE_CLIENT_ID,
-  client_secret: CASHFREE_CLIENT_SECRET,
-  environment: CASHFREE_ENV,
+console.log("Hello from Functions!");
+
+serve(async (req) => {
+  const { name } = await req.json();
+  const data = {
+    message: `Hello ${name}!`,
+  };
+
+  return new Response(JSON.stringify(data), {
+    headers: { "Content-Type": "application/json" },
+  });
 });
 
-const app = new Hono();
-
-/**
- * GET /cashfree/payments/:orderId
- * Returns the list of payment objects for the given order.
- */
-app.get("/cashfree/:orderId/payments", async (c) => {
-  try {
-    const { orderId } = c.req.param();
-
-    // Retrieve all payments for this Cashfree order
-    const payments = await cf.payment.getPaymentsByOrderId(orderId);
-
-    return c.json({ payments }, 200);
-  } catch (err) {
-    console.error("Get payments error:", err);
-    return c.json({ error: err?.message ?? "Internal server error" }, 500);
-  }
-});
-
-Deno.serve(app.fetch);
+// To invoke:
+// curl -i --location --request POST 'http://localhost:54321/functions/v1/' \
+//   --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24ifQ.625_WdcF3KHqz5amU0x2X5WWHP-OEs_4qj0ssLNHzTs' \
+//   --header 'Content-Type: application/json' \
+//   --data '{"name":"Functions"}'
