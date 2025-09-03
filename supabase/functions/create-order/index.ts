@@ -1,24 +1,49 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
+import { Cashfree } from "npm:cashfree-pg-sdk@1.0.0";
 
-import { serve } from "std/http/server.ts";
+// Environment variables set in Supabase Edge Functions
+const CASHFREE_APP_ID = Deno.env.get("CASHFREE_APP_ID") ?? "";
+const CASHFREE_SECRET_KEY = Deno.env.get("CASHFREE_SECRET_KEY") ?? "";
 
-console.log("Hello from Functions!");
+if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
+  console.error("Cashfree credentials not set");
+  // Edge Functions should still start; errors will be returned per request
+}
 
-serve(async (req) => {
-  const { name } = await req.json();
-  const data = {
-    message: `Hello ${name}!`,
-  };
-
-  return new Response(JSON.stringify(data), {
-    headers: { "Content-Type": "application/json" },
-  });
+// Initialize the Cashfree SDK client
+const cashfree = new Cashfree({
+  appId: CASHFREE_APP_ID,
+  secretKey: CASHFREE_SECRET_KEY,
 });
 
-// To invoke:
-// curl -i --location --request POST 'http://localhost:54321/functions/v1/' \
-//   --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24ifQ.625_WdcF3KHqz5amU0x2X5WWHP-OEs_4qj0ssLNHzTs' \
-//   --header 'Content-Type: application/json' \
-//   --data '{"name":"Functions"}'
+console.info("create-order edge function started");
+
+Deno.serve(async (req: Request) => {
+  try {
+    const { orderId, orderAmount, orderCurrency, orderNote, customerEmail, customerPhone } = await req.json();
+
+    if (!orderId || !orderAmount || !orderCurrency) {
+      return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    }
+
+    const payload = {
+      order_id: orderId,
+      order_amount: orderAmount,
+      order_currency: orderCurrency,
+      order_note: orderNote,
+      customer_details: {
+        customer_email: customerEmail,
+        customer_phone: customerPhone,
+      },
+    };
+
+    const response = await cashfree.order.create(payload);
+
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { "Content-Type": "application/json", "Connection": "keep-alive" },
+    });
+  } catch (err) {
+    console.error("Error creating order:", err);
+    return new Response(JSON.stringify({ error: err?.message || String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
+  }
+});

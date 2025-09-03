@@ -1,24 +1,33 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
+import { Cashfree } from "npm:cashfree-pg-sdk@1.0.0";
 
-import { serve } from "std/http/server.ts";
+const CASHFREE_APP_ID = Deno.env.get("CASHFREE_APP_ID") ?? "";
+const CASHFREE_SECRET_KEY = Deno.env.get("CASHFREE_SECRET_KEY") ?? "";
 
-console.log("Hello from Functions!");
-
-serve(async (req) => {
-  const { name } = await req.json();
-  const data = {
-    message: `Hello ${name}!`,
-  };
-
-  return new Response(JSON.stringify(data), {
-    headers: { "Content-Type": "application/json" },
-  });
+const cashfree = new Cashfree({
+  appId: CASHFREE_APP_ID,
+  secretKey: CASHFREE_SECRET_KEY,
 });
 
-// To invoke:
-// curl -i --location --request POST 'http://localhost:54321/functions/v1/' \
-//   --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24ifQ.625_WdcF3KHqz5amU0x2X5WWHP-OEs_4qj0ssLNHzTs' \
-//   --header 'Content-Type: application/json' \
-//   --data '{"name":"Functions"}'
+console.info("load-checkout edge function started");
+
+Deno.serve(async (req: Request) => {
+  try {
+    // Expect orderId as query param: /load-checkout?orderId=xyz
+    const url = new URL(req.url);
+    const orderId = url.searchParams.get("orderId");
+    if (!orderId) {
+      return new Response(JSON.stringify({ error: "orderId query param required" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    }
+
+    // Fetch the checkout page link from Cashfree
+    const response = await cashfree.checkout.get(orderId);
+    // The SDK typically returns an object containing the checkout URL
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { "Content-Type": "application/json", "Connection": "keep-alive" },
+    });
+  } catch (err) {
+    console.error("Error loading checkout page:", err);
+    return new Response(JSON.stringify({ error: err?.message || String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
+  }
+});
